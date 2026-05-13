@@ -9,7 +9,7 @@ import com.warehouse.entity.User;
 import com.warehouse.mapper.UserMapper;
 import com.warehouse.security.JwtUtils;
 import com.warehouse.service.AuthService;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -21,18 +21,27 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @Service
-@RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtUtils jwtUtils;
-    private final RedisTemplate<String, Object> redisTemplate;
+
+    @Autowired(required = false)
+    private RedisTemplate<String, Object> redisTemplate;
+
+    public AuthServiceImpl(UserMapper userMapper, PasswordEncoder passwordEncoder,
+                           AuthenticationManager authenticationManager, JwtUtils jwtUtils) {
+        this.userMapper = userMapper;
+        this.passwordEncoder = passwordEncoder;
+        this.authenticationManager = authenticationManager;
+        this.jwtUtils = jwtUtils;
+    }
 
     @Override
     public Map<String, Object> login(LoginDto dto) {
-        Authentication authentication = authenticationManager.authenticate(
+        authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(dto.getUsername(), dto.getPassword()));
 
         User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
@@ -41,9 +50,9 @@ public class AuthServiceImpl implements AuthService {
         String token = jwtUtils.generateToken(user.getId(), user.getUsername());
         String refreshToken = jwtUtils.generateRefreshToken(user.getId(), user.getUsername());
 
-        redisTemplate.opsForValue().set("token:" + token, "1",
-                jwtUtils.generateToken(user.getId(), user.getUsername()).length(),
-                TimeUnit.MILLISECONDS);
+        if (redisTemplate != null) {
+            redisTemplate.opsForValue().set("token:" + token, "1", 86400, TimeUnit.SECONDS);
+        }
 
         return Map.of(
                 "token", token,
@@ -87,7 +96,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void logout(String token) {
-        if (StrUtil.isNotBlank(token)) {
+        if (StrUtil.isNotBlank(token) && redisTemplate != null) {
             redisTemplate.delete("token:" + token);
         }
     }

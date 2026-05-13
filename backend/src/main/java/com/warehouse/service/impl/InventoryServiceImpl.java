@@ -30,13 +30,14 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     public Page<Map<String, Object>> page(Integer pageNum, Integer pageSize, String keyword) {
-        Page<Map<String, Object>> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<Inventory> wrapper = new LambdaQueryWrapper<>();
         wrapper.orderByDesc(Inventory::getUpdateTime);
-        inventoryMapper.selectPage(page, wrapper);
-        List<Map<String, Object>> records = inventoryMapper.selectInventoryWithGoods();
-        page.setRecords(records);
-        return page;
+        Page<Inventory> invPage = inventoryMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
+
+        Page<Map<String, Object>> result = new Page<>(pageNum, pageSize);
+        result.setTotal(invPage.getTotal());
+        result.setRecords(inventoryMapper.selectInventoryWithGoods());
+        return result;
     }
 
     @Override
